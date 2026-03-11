@@ -52,17 +52,27 @@ description: Multi-source information search and aggregation skill. Use when age
   - "{主题} GitHub trending"
 ```
 
-### 步骤 3：并行搜索执行
+### 步骤 3：并行搜索执行（带时效性过滤）
 
-同时调用多个搜索工具，收集结果：
+同时调用多个搜索工具，**必须在搜索阶段就加入时效性约束**：
 
 ```
 并行调用:
-  1. kimi_search(query1, limit=10)
-  2. kimi_search(query2, limit=10)
-  3. web_search(query3, limit=10)
-  ...
+  1. kimi_search(query1, limit=20, freshness="pd")  # 过去24小时
+  2. web_search(query2, limit=20, freshness="pd")   # 过去24小时
+  3. kimi_search(query3, limit=20, freshness="pw")  # 过去一周（备用）
 ```
+
+**时效性参数说明：**
+- `freshness="pd"` - 过去24小时（past day），技术日报首选
+- `freshness="pw"` - 过去一周（past week），博客精选可用
+- `freshness="pm"` - 过去一月（past month）
+- `freshness="py"` - 过去一年（past year）
+
+**技术日报执行策略：**
+1. 先使用 `freshness="pd"` 搜索，获取24小时内最新内容
+2. 如果结果不足，再使用 `freshness="pw"` 补充，但手动过滤超过48小时的内容
+3. 所有搜索结果必须检查日期，超过48小时的直接丢弃
 
 ### 步骤 4：结果聚合与去重
 
@@ -71,15 +81,22 @@ description: Multi-source information search and aggregation skill. Use when age
 - 基于标题相似度去重
 - 按时间排序
 
-### 步骤 5：内容筛选与评分
+### 步骤 5：内容筛选与评分（含时效性硬过滤）
 
-评分维度：
-- **时效性** (0-10)：发布时间越近越高
+**硬约束 - 时效性检查：**
+- 技术日报：只保留 **48小时内** 发布的内容
+- 博客精选：可放宽到 **3-5天内**
+- 超过时效的内容直接丢弃，不参与评分
+
+评分维度（仅对符合时效性的内容）：
+- **时效性** (0-10)：发布时间越近越高（24小时内得10分，48小时内得7-9分）
 - **权威性** (0-10)：来源可信度
 - **相关性** (0-10)：与主题匹配度
 - **完整性** (0-10)：内容深度和信息量
 
-筛选标准：总分 ≥ 25 且相关性 ≥ 6
+筛选标准：
+- 必须符合时效性要求（硬门槛）
+- 总分 ≥ 25 且相关性 ≥ 6
 
 ### 步骤 6：获取详细内容（可选）
 
@@ -103,34 +120,35 @@ search_config:
         - "LLM large language model latest research arXiv 2026"
         - "大模型 LLM 最新进展 2026"
         - "GPT Claude Gemini 新功能发布"
-      limit: 10
+      limit: 20
       
     - name: "Agent框架"
       queries:
         - "AI Agent framework application 2026"
         - "Agent 框架 应用 最新"
         - "MCP protocol LangGraph AutoGen"
-      limit: 10
+      limit: 20
       
     - name: "机器人/具身智能"
       queries:
         - "embodied AI robotics humanoid robot 2026"
         - "人形机器人 具身智能 最新"
         - "Tesla Optimus Figure AI"
-      limit: 10
+      limit: 20
       
     - name: "生成式搜推广"
       queries:
         - "generative recommendation GenRec search advertising 2026"
         - "生成式推荐 搜推广 最新"
         - "OneRec HSTU GR4AD"
-      limit: 10
+      limit: 20
   
   filters:
-    freshness: "past_week"  # pd, pw, pm, py
+    freshness: "pd"  # pd=过去24小时, pw=过去一周, pm=过去一月, py=过去一年
     min_score: 25
     deduplicate: true
     max_results_per_topic: 5
+    max_age_hours: 48  # 技术日报只收录48小时内内容
   
   output:
     format: "markdown"
@@ -195,7 +213,7 @@ Agent 执行:
    - "MCP protocol latest updates 2026"
    - "Model Context Protocol Anthropic"
    - "MCP Agent integration examples"
-3. 执行搜索，获取前 20 条结果
+3. 执行搜索，获取前 30 条结果
 4. 筛选高评分内容
 5. 获取详细内容（fetch）
 6. 输出研究报告
@@ -203,11 +221,12 @@ Agent 执行:
 
 ## 最佳实践
 
-1. **查询多样化**：同一主题用不同角度查询，提高覆盖率
-2. **中英文结合**：技术内容英文更全面，中文有独特视角
-3. **时效性优先**：技术领域优先选择最近 1-2 周的内容
-4. **来源交叉验证**：重要信息通过多个来源验证
-5. **渐进式深入**：先广泛搜索，再对重点内容深度获取
+1. **时效性是第一优先级**：技术日报必须在搜索阶段就使用 `freshness="pd"` 参数，只收录48小时内内容
+2. **扩大搜索量级**：建议每主题 limit=20-30，确保返回池子足够大，筛选后保留高质量内容
+3. **查询多样化**：同一主题用不同角度查询，提高覆盖率
+4. **中英文结合**：技术内容英文更全面，中文有独特视角
+5. **来源交叉验证**：重要信息通过多个来源验证
+6. **渐进式深入**：先广泛搜索，再对重点内容深度获取
 
 ## 故障处理
 
