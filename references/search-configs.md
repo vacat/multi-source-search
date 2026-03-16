@@ -70,12 +70,16 @@ keywords:
 
 ### 高时效性模式（适合日报）
 
+**注意**：kimi_search 不支持 freshness 参数，需在获取结果后手动过滤日期
+
 ```yaml
 filters:
-  freshness: "past_week"
+  # freshness 参数仅 web_search 在 Brave/Perplexity 后端下支持
+  # kimi_search 不支持，需手动过滤
   min_score: 25
   max_results: 5
   deduplicate: true
+  max_age_hours: 48  # 手动过滤48小时内的内容
 
 scoring:
   weights:
@@ -89,10 +93,10 @@ scoring:
 
 ```yaml
 filters:
-  freshness: "past_month"
   min_score: 20
   max_results: 10
   deduplicate: true
+  max_age_hours: 168  # 一周内
 
 scoring:
   weights:
@@ -106,10 +110,10 @@ scoring:
 
 ```yaml
 filters:
-  freshness: "past_month"
   min_score: 15
   max_results: 20
   deduplicate: true
+  max_age_hours: 720  # 一个月内
 
 scoring:
   weights:

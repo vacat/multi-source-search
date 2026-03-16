@@ -22,9 +22,10 @@ description: Multi-source information search and aggregation skill. Use when age
 | 工具 | 用途 | 适用场景 |
 |-----|------|---------|
 | `kimi_search` | Kimi 互联网搜索 | 最新新闻、论文、博客、综合信息 |
-| `web_search` | Brave Search API | 英文内容、技术文档、国际资讯 |
+| `web_search` | Brave Search API | 英文内容、技术文档（需配置 API key）|
 | `web_fetch` | 网页内容获取 | 获取具体页面详细内容 |
 | `kimi_fetch` | Kimi URL 获取 | 获取中文页面详细内容 |
+| **multi-search-engine** | 17个搜索引擎聚合 | **无需 API key**，支持时间过滤 |
 
 ## 标准搜索流程
 
@@ -52,27 +53,48 @@ description: Multi-source information search and aggregation skill. Use when age
   - "{主题} GitHub trending"
 ```
 
-### 步骤 3：并行搜索执行（带时效性过滤）
+### 步骤 3：并行搜索执行
 
-同时调用多个搜索工具，**必须在搜索阶段就加入时效性约束**：
+**方案 A：使用 multi-search-engine（推荐，无需 API key）**
 
+使用 `web_fetch` 直接访问搜索引擎 URL，支持时间过滤：
+
+```javascript
+// 中文内容 - 百度
+web_fetch({"url": "https://www.baidu.com/s?wd=AI最新进展2026"})
+
+// 中文内容 - 必应
+web_fetch({"url": "https://cn.bing.com/search?q=大模型+最新+2026"})
+
+// 英文内容 - Google + 过去24小时（关键！）
+web_fetch({"url": "https://www.google.com/search?q=AI+news&tbs=qdr:d"})
+
+// 英文内容 - Google + 过去一周
+web_fetch({"url": "https://www.google.com/search?q=LLM+breakthrough&tbs=qdr:w"})
+
+// DuckDuckGo 隐私搜索
+web_fetch({"url": "https://duckduckgo.com/html/?q=MCP+protocol+latest"})
 ```
-并行调用:
-  1. kimi_search(query1, limit=20, freshness="pd")  # 过去24小时
-  2. web_search(query2, limit=20, freshness="pd")   # 过去24小时
-  3. kimi_search(query3, limit=20, freshness="pw")  # 过去一周（备用）
+
+**时间过滤参数（关键）：**
+- `tbs=qdr:d` - **过去24小时**（日报首选）
+- `tbs=qdr:w` - 过去一周
+- `tbs=qdr:h` - 过去1小时
+
+**方案 B：使用 kimi_search + web_search**
+
+```javascript
+// kimi_search 不支持 freshness
+kimi_search(query, limit=20)
+
+// web_search 仅在配置 Brave/Perplexity 时支持 freshness
+web_search(query, limit=20, freshness="pd")  // 需要 API key
 ```
 
-**时效性参数说明：**
-- `freshness="pd"` - 过去24小时（past day），技术日报首选
-- `freshness="pw"` - 过去一周（past week），博客精选可用
-- `freshness="pm"` - 过去一月（past month）
-- `freshness="py"` - 过去一年（past year）
-
-**技术日报执行策略：**
-1. 先使用 `freshness="pd"` 搜索，获取24小时内最新内容
-2. 如果结果不足，再使用 `freshness="pw"` 补充，但手动过滤超过48小时的内容
-3. 所有搜索结果必须检查日期，超过48小时的直接丢弃
+**重要说明：**
+- `multi-search-engine` 方案 **无需 API key**，通过 URL 参数实现时间过滤
+- `kimi_search` **不支持**任何时间过滤参数
+- `web_search` 仅在配置 Brave 或 Perplexity 后端时支持 `freshness`
 
 ### 步骤 4：结果聚合与去重
 
@@ -144,11 +166,10 @@ search_config:
       limit: 20
   
   filters:
-    freshness: "pd"  # pd=过去24小时, pw=过去一周, pm=过去一月, py=过去一年
     min_score: 25
     deduplicate: true
     max_results_per_topic: 5
-    max_age_hours: 48  # 技术日报只收录48小时内内容
+    max_age_hours: 48  # 技术日报只收录48小时内内容（需在搜索结果中手动检查日期）
   
   output:
     format: "markdown"
@@ -221,7 +242,7 @@ Agent 执行:
 
 ## 最佳实践
 
-1. **时效性是第一优先级**：技术日报必须在搜索阶段就使用 `freshness="pd"` 参数，只收录48小时内内容
+1. **时效性手动过滤**：`kimi_search` 不支持 `freshness` 参数，获取结果后必须手动检查每条内容的日期，过滤过时内容
 2. **扩大搜索量级**：建议每主题 limit=20-30，确保返回池子足够大，筛选后保留高质量内容
 3. **查询多样化**：同一主题用不同角度查询，提高覆盖率
 4. **中英文结合**：技术内容英文更全面，中文有独特视角
